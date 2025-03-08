@@ -11,5 +11,7 @@ LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 VOID	Popup(LPCWSTR = L"", LPCWSTR = L"");
 HRESULT PopupErr(LPCWSTR = L"", HRESULT = HRESULT_FROM_WIN32(GetLastError()), LPCWSTR = L"");
 
+LPWSTR NumStr(unsigned long long);
+
 #endif
 

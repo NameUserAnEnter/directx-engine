@@ -1,4 +1,5 @@
 #include "Graphics.h"
+#include <math.h>
 
 HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, int x, int y) {
 	WNDCLASSEX wcex;
@@ -26,6 +27,9 @@ HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, i
 	if (hWnd == NULL) {
 		return PopupErr(L"CreateWindow");
 	}
+
+	//return PopupErr(L"Test", 1073741824);
+	return PopupErr(L"Test", 2147483648);
 
 	ShowWindow(hWnd, SW_SHOW);
 	UpdateWindow(hWnd);
@@ -55,8 +59,45 @@ VOID Popup(LPCWSTR lpMessage, LPCWSTR lpCaption) {
 }
 
 HRESULT PopupErr(LPCWSTR lpMessage, HRESULT hr, LPCWSTR lpCaption) {
-	// TODO: include error code from hr in the message
-	Popup(lpMessage, lpCaption);
+	wchar_t* szCode = NumStr(hr);
+	const wchar_t szSep[] = L": ";
+
+	int buf_size = wcslen(lpMessage) + wcslen(szSep) + wcslen(szCode) + 1;
+	wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));
+	buf[0] = L'\0';
+	
+	wcscat_s(buf, buf_size, lpMessage);
+	wcscat_s(buf, buf_size, szSep);
+	wcscat_s(buf, buf_size, szCode);
+	Popup(buf, lpCaption);
+
+	free(szCode);
+	free(buf);
 	return hr;
+}
+
+LPWSTR NumStr(unsigned long long num) {
+	if (num == 0) {
+		wchar_t* buf = (wchar_t*) calloc(2, sizeof(wchar_t));
+		buf[0] = L'0';
+		buf[1] = L'\0';
+
+		return buf;
+	}
+
+	int digits = 0;
+	while (pow(10, digits ) <= num) digits++;
+
+	int buf_size = digits + 1;		// add one for '\0'
+
+	wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));
+	buf[buf_size - 1] = '\0';
+
+	for (int i = 0; i < digits; i++) {
+		int digit = (num - (num / (unsigned long long) pow(10, i + 1)) * pow(10, i + 1)) / (unsigned long long) pow(10, i);
+		buf[digits - 1 - i] = (wchar_t) L'0' + (wchar_t) digit;
+	}
+
+	return buf;
 }
 
