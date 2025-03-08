@@ -28,7 +28,8 @@ HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, i
 		return PopupErr(L"CreateWindow");
 	}
 
-	//return PopupErr(L"Test", 1073741824);
+	//return PopupErr(L"Test", 255);
+	return PopupErr(L"Test", 2147483647);
 	return PopupErr(L"Test", 2147483648);
 
 	ShowWindow(hWnd, SW_SHOW);
@@ -59,7 +60,7 @@ VOID Popup(LPCWSTR lpMessage, LPCWSTR lpCaption) {
 }
 
 HRESULT PopupErr(LPCWSTR lpMessage, HRESULT hr, LPCWSTR lpCaption) {
-	wchar_t* szCode = NumStr(hr);
+	wchar_t* szCode = HexStr(hr);
 	const wchar_t szSep[] = L": ";
 
 	int buf_size = wcslen(lpMessage) + wcslen(szSep) + wcslen(szCode) + 1;
@@ -76,7 +77,7 @@ HRESULT PopupErr(LPCWSTR lpMessage, HRESULT hr, LPCWSTR lpCaption) {
 	return hr;
 }
 
-LPWSTR NumStr(unsigned long long num) {
+LPWSTR NumStr(unsigned long long num, unsigned int base) {
 	if (num == 0) {
 		wchar_t* buf = (wchar_t*) calloc(2, sizeof(wchar_t));
 		buf[0] = L'0';
@@ -86,7 +87,7 @@ LPWSTR NumStr(unsigned long long num) {
 	}
 
 	int digits = 0;
-	while (pow(10, digits ) <= num) digits++;
+	while (pow(base, digits ) <= num) digits++;
 
 	int buf_size = digits + 1;		// add one for '\0'
 
@@ -94,10 +95,25 @@ LPWSTR NumStr(unsigned long long num) {
 	buf[buf_size - 1] = '\0';
 
 	for (int i = 0; i < digits; i++) {
-		int digit = (num - (num / (unsigned long long) pow(10, i + 1)) * pow(10, i + 1)) / (unsigned long long) pow(10, i);
-		buf[digits - 1 - i] = (wchar_t) L'0' + (wchar_t) digit;
+		int digit = (num - (num / (unsigned long long) pow(base, i + 1)) * (unsigned long long) pow(base, i + 1)) / (unsigned long long) pow(base, i);
+
+		if (digit >= 10) buf[digits - 1 - i] = (wchar_t) L'A' - (wchar_t) 10 + wchar_t(digit);
+		else buf[digits - 1 - i] = (wchar_t) L'0' + (wchar_t) digit;
 	}
 
+	return buf;
+}
+
+LPWSTR HexStr(unsigned long long num) {
+	const wchar_t prefix[] = L"0x";
+	wchar_t* num_part = NumStr(num, 16);
+
+	int buf_size = wcslen(prefix) + wcslen(num_part) + 1;
+	wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));
+	buf[0] = L'\0';
+
+	wcscat_s(buf, buf_size, prefix);
+	wcscat_s(buf, buf_size, num_part);
 	return buf;
 }
 
