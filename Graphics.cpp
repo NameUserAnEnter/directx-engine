@@ -46,28 +46,18 @@ HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, i
 		free(buf);
 		free(p1);
 		free(p2);
+
+		//Popup(p1);
+		//free(p1);
 	};
 
-  //Test(0x0);
-  //Test(0xFF);
-  //Test(0xFFFFFFFF);
-  //Test(0xFFFFFFFFFFFFFFF);
-  //Test(0x1000000000000000);
-  //Test(0x1FFFFFFFFFFFFFFF);
-
-  //Test(0x7FFFFFFFFFFFFFFF);
-  //Test(0x8000000000000000);
-  //Test(0x800000000000000F);
-  //Test(0xEFFFFFFFFFFFFFFF);
-  //Test(0xF000000000000000);
-  //Test(0xF0FFFFFFFFFFFFFF);
-  //Test(0xFFFFFFFFFFFFFBFF);
-  //Test(0xFFFFFFFFFFFFFC00);
-  //Test(0xFFFFFFFFFFFFFF0F);
-
-  //Test(0xFFFFFFFFFFFFFBFF);
+	Test(0x0);
+	Test(0xFF);
+	Test(0xFFFFFFFF);
+	Test(0xFFFFFFFFFFFFFFF);
 	Test(0xFFFFFFFFFFFFFBFF);
 	Test(0xFFFFFFFFFFFFFC00);
+	Test(0xFFFFFFFFFFFFFFFF);
 	return 0x01;
 
 	ShowWindow(hWnd, SW_SHOW);
@@ -116,30 +106,37 @@ HRESULT PopupErr(LPCWSTR lpMessage, HRESULT hr, LPCWSTR lpCaption) {
 }
 
 LPWSTR NumStr(unsigned long long num, unsigned int base) {
-	if (num == 0) {
-		wchar_t* buf = (wchar_t*) calloc(2, sizeof(wchar_t));
-		buf[0] = L'\0';
+	if (base == 0) return nullptr;
 
-		wcscat_s(buf, 2, L"0");
+	// 5678 // 10 = 567 | 1
+	// 567 // 10 = 56   | 2
+	// 56 // 10 = 5     | 3
+	// 5 // 10 = 0      | 4
 
-		return buf;
-	}
-	
-	// 5678 /    1 = 5678  -> 5678  % 10 = 8     -> 8
-	// 5678 /   10 = 567.8 -> 567.8 % 10 = 7.8   -> 7
-	// 5678 /  100 = 56.78 -> 56.78 % 10 = 6.78  -> 6
-	// 5678 / 1000 = 5.678 -> 5.678 % 10 = 5.678 -> 5
+	// 100 // 10 = 10 | 1
+	// 10 // 10 = 1   | 2
+	// 1 // 10 = 0    | 3
 
 	int digits = 0;
-	while (pow(base, digits ) <= num) digits++;
+	unsigned long long remaining = num;
+
+	do {
+		digits++;
+
+		remaining /= base;
+	} while(remaining > 0);
 
 	int buf_size = digits + 1;		// add one for '\0'
 
 	wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));
 	buf[buf_size - 1] = '\0';
 
+	// 5678 /    1 = 5678  -> 5678  % 10 = 8     -> 8
+	// 5678 /   10 = 567.8 -> 567.8 % 10 = 7.8   -> 7
+	// 5678 /  100 = 56.78 -> 56.78 % 10 = 6.78  -> 6
+	// 5678 / 1000 = 5.678 -> 5.678 % 10 = 5.678 -> 5
+
 	for (int i = 0; i < digits; i++) {
-		//int digit = (int) ((num / (unsigned long long) pow(base, i)) % base);
 		int digit = (int) ((num / (unsigned long long) pow(base, i)) % base);
 
 		if (digit >= 10) buf[digits - 1 - i] = (wchar_t) L'A' - (wchar_t) 10 + (wchar_t) digit;
@@ -160,12 +157,5 @@ LPWSTR HexStr(unsigned long long num) {
 	wcscat_s(buf, buf_size, prefix);
 	wcscat_s(buf, buf_size, num_part);
 	return buf;
-}
-
-unsigned long long power(unsigned long long base, unsigned short exponent) {
-	unsigned long long r = 1;
-	for (int i = 0; i < exponent; i++) r *= base;
-
-	return r;
 }
 

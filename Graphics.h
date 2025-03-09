@@ -14,7 +14,5 @@ HRESULT PopupErr(LPCWSTR = L"", HRESULT = HRESULT_FROM_WIN32(GetLastError()), LP
 LPWSTR NumStr(unsigned long long, unsigned int = 10);
 LPWSTR HexStr(unsigned long long);
 
-unsigned long long power(unsigned long long, unsigned short);
-
 #endif
 
