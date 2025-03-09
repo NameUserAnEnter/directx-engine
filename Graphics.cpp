@@ -23,42 +23,11 @@ HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, i
 	int nWindowWidth = rc.right - rc.left;
 	int nWindowHeight = rc.bottom - rc.top;
 
-	HWND hWnd = CreateWindowW(wc.lpszClassName, lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
+	HWND hWnd = CreateWindowW(L"", lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
+	//HWND hWnd = CreateWindowW(wc.lpszClassName, lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
 	if (hWnd == NULL) {
 		return PopupErr(L"CreateWindow");
 	}
-
-	auto Test = [](unsigned long long num) {
-		LPWSTR p1 = HexStr(num);
-		LPWSTR p2 = NumStr(num);
-		LPCWSTR sep = L"\n";
-
-		unsigned int buf_size = wcslen(p1) + wcslen(sep) + wcslen(p2) + 1;
-		wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));
-		buf[0] = L'\0';
-
-		wcscat_s(buf, buf_size, p1);
-		wcscat_s(buf, buf_size, sep);
-		wcscat_s(buf, buf_size, p2);
-
-		Popup(buf);
-
-		free(buf);
-		free(p1);
-		free(p2);
-
-		//Popup(p1);
-		//free(p1);
-	};
-
-	Test(0x0);
-	Test(0xFF);
-	Test(0xFFFFFFFF);
-	Test(0xFFFFFFFFFFFFFFF);
-	Test(0xFFFFFFFFFFFFFBFF);
-	Test(0xFFFFFFFFFFFFFC00);
-	Test(0xFFFFFFFFFFFFFFFF);
-	return 0x01;
 
 	ShowWindow(hWnd, SW_SHOW);
 	UpdateWindow(hWnd);
@@ -87,8 +56,8 @@ VOID Popup(LPCWSTR lpMessage, LPCWSTR lpCaption) {
 	MessageBoxW(NULL, lpMessage, lpCaption, MB_OK);
 }
 
-HRESULT PopupErr(LPCWSTR lpMessage, HRESULT hr, LPCWSTR lpCaption) {
-	wchar_t* szCode = HexStr(hr);
+DWORD PopupErr(LPCWSTR lpMessage, DWORD code, LPCWSTR lpCaption) {
+	wchar_t* szCode = HexStr(code);
 	const wchar_t szSep[] = L": ";
 
 	int buf_size = wcslen(lpMessage) + wcslen(szSep) + wcslen(szCode) + 1;
@@ -102,7 +71,7 @@ HRESULT PopupErr(LPCWSTR lpMessage, HRESULT hr, LPCWSTR lpCaption) {
 
 	free(szCode);
 	free(buf);
-	return hr;
+	return code;
 }
 
 LPWSTR NumStr(unsigned long long num, unsigned int base) {
