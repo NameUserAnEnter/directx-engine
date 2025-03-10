@@ -1,6 +1,22 @@
 #include "Graphics.h"
 #include <math.h>
 
+namespace Graphics {
+	BOOL bWindowCreated = FALSE;
+	BOOL bRunLoop		= FALSE;
+	HWND hWnd			= NULL;
+};
+
+VOID RenderFrame();
+
+LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+
+VOID	Popup(LPCWSTR = L"", LPCWSTR = L"");
+DWORD	PopupErr(LPCWSTR = L"", DWORD = GetLastError(), LPCWSTR = L"");
+
+LPWSTR NumStr(unsigned long long, unsigned int = 10);
+LPWSTR HexStr(unsigned long long);
+
 HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, int x, int y) {
 	WNDCLASSEX wcex;
 	ZeroMemory(&wcex, sizeof(wcex));
@@ -23,16 +39,45 @@ HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, i
 	int nWindowWidth = rc.right - rc.left;
 	int nWindowHeight = rc.bottom - rc.top;
 
-	HWND hWnd = CreateWindowW(L"", lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
-	//HWND hWnd = CreateWindowW(wc.lpszClassName, lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
+	HWND hWnd = CreateWindowW(wc.lpszClassName, lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
 	if (hWnd == NULL) {
 		return PopupErr(L"CreateWindow");
 	}
+
+	Graphics::hWnd = hWnd;
+	Graphics::bWindowCreated = TRUE;
 
 	ShowWindow(hWnd, SW_SHOW);
 	UpdateWindow(hWnd);
 
 	return S_OK;
+}
+
+HRESULT InitGraphics() {
+	return S_OK;
+}
+
+HRESULT StartLoop() {
+	if (!Graphics::bWindowCreated) return 0x01;
+
+	MSG msg = { };
+
+	Graphics::bRunLoop = TRUE;
+
+	while (Graphics::bRunLoop) {
+		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE) != 0) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+
+		RenderFrame();
+	}
+
+	return S_OK;
+}
+
+VOID RenderFrame() {
+	//
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -43,9 +88,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			break;
 		case WM_KEYDOWN:
 			break;
+
 		case WM_DESTROY:
+			Graphics::bRunLoop = FALSE;
 			PostQuitMessage(0);
 			break;
+
 		default:
 			return DefWindowProc(hWnd, uMsg, wParam, lParam);
 	}
@@ -77,15 +125,6 @@ DWORD PopupErr(LPCWSTR lpMessage, DWORD code, LPCWSTR lpCaption) {
 LPWSTR NumStr(unsigned long long num, unsigned int base) {
 	if (base == 0) return nullptr;
 
-	// 5678 // 10 = 567 | 1
-	// 567 // 10 = 56   | 2
-	// 56 // 10 = 5     | 3
-	// 5 // 10 = 0      | 4
-
-	// 100 // 10 = 10 | 1
-	// 10 // 10 = 1   | 2
-	// 1 // 10 = 0    | 3
-
 	int digits = 0;
 	unsigned long long remaining = num;
 
@@ -100,18 +139,16 @@ LPWSTR NumStr(unsigned long long num, unsigned int base) {
 	wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));
 	buf[buf_size - 1] = '\0';
 
-	// 5678 /    1 = 5678  -> 5678  % 10 = 8     -> 8
-	// 5678 /   10 = 567.8 -> 567.8 % 10 = 7.8   -> 7
-	// 5678 /  100 = 56.78 -> 56.78 % 10 = 6.78  -> 6
-	// 5678 / 1000 = 5.678 -> 5.678 % 10 = 5.678 -> 5
-
 	for (int i = 0; i < digits; i++) {
 		int digit = (int) ((num / (unsigned long long) pow(base, i)) % base);
 
-		if (digit >= 10) buf[digits - 1 - i] = (wchar_t) L'A' - (wchar_t) 10 + (wchar_t) digit;
-		else buf[digits - 1 - i] = (wchar_t) L'0' + (wchar_t) digit;
+		wchar_t starting_point = L'0';
+		if (digit >= 10) starting_point = L'A' - (wchar_t) 10;
+		
+		buf[digits - 1 - i] = starting_point + (wchar_t) digit;
 	}
 
+	// memory pointed to by the returned pointer has to be freed when no longer needed
 	return buf;
 }
 
@@ -125,6 +162,7 @@ LPWSTR HexStr(unsigned long long num) {
 
 	wcscat_s(buf, buf_size, prefix);
 	wcscat_s(buf, buf_size, num_part);
+
 	return buf;
 }
 

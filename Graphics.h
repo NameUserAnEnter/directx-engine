@@ -3,16 +3,13 @@
 
 #include <Windows.h>
 
-// TODO: consider putting the functions into a namespace to avoid overlapping function names with external functions, especially for inside utility functions
+// TODO:
+// - consider implementing a memory management class with a single static object for allocation and deallocation
 
 HRESULT InitWindow(LPCWSTR, int = 640, int = 480, int = 0, int = 0);
-LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+HRESULT InitGraphics();
 
-VOID	Popup(LPCWSTR = L"", LPCWSTR = L"");
-DWORD	PopupErr(LPCWSTR = L"", DWORD = GetLastError(), LPCWSTR = L"");
-
-LPWSTR NumStr(unsigned long long, unsigned int = 10);
-LPWSTR HexStr(unsigned long long);
+HRESULT StartLoop();
 
 #endif
 
