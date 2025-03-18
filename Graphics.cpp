@@ -1,12 +1,9 @@
 #include "Graphics.h"
 #include <math.h>
+#include <d3d9.h>
 
-namespace Graphics {
-	BOOL bWindowCreated = FALSE;
-	BOOL bRunLoop		= FALSE;
-	HWND hWnd			= NULL;
-};
 
+// Functions used only in this file
 VOID RenderFrame();
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -17,6 +14,26 @@ DWORD	PopupErr(LPCWSTR = L"", DWORD = GetLastError(), LPCWSTR = L"");
 LPWSTR NumStr(unsigned long long, unsigned int = 10);
 LPWSTR HexStr(unsigned long long);
 
+
+// Namespace for objects used across this file
+namespace Graphics {
+	BOOL bWindowCreated = FALSE;
+	BOOL bRunLoop		= FALSE;
+	HWND hWnd			= NULL;
+
+	LPDIRECT3D9 pd3d			= NULL;
+	LPDIRECT3DDEVICE9 pd3ddev	= NULL;
+
+	static struct Collector {
+		~Collector() {
+			if (pd3ddev != NULL)	pd3ddev->Release();
+			if (pd3d != NULL)		pd3d->Release();
+		}
+	} _collector;
+};
+
+
+// Function definitions
 HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, int x, int y) {
 	WNDCLASSEX wcex;
 	ZeroMemory(&wcex, sizeof(wcex));
@@ -54,6 +71,27 @@ HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, i
 }
 
 HRESULT InitGraphics() {
+	using namespace Graphics;
+
+	// Create D3D object
+	pd3d = Direct3DCreate9(D3D_SDK_VERSION);
+	if (pd3d == NULL) return PopupErr(L"Cannot create D3D object.", 0x01);
+
+	RECT client;
+	if (!GetClientRect(hWnd, &client)) return PopupErr(L"GetClientRect");
+
+	// Initialize D3D present parameters
+	D3DPRESENT_PARAMETERS d3dpp = { };
+	d3dpp.Windowed = TRUE;
+	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	d3dpp.BackBufferFormat = D3DFMT_UNKNOWN;
+	//d3dpp.BackBufferWidth = client.right - client.left;
+	//d3dpp.BackBufferHeight = client.bottom - client.top;
+
+	// Create D3D device
+	HRESULT hr = pd3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &pd3ddev);
+	if (hr != D3D_OK) return PopupErr(L"Cannot create D3D device.", 0x02);
+
 	return S_OK;
 }
 
@@ -76,8 +114,18 @@ HRESULT StartLoop() {
 	return S_OK;
 }
 
+
+// Function definitions for local functions
 VOID RenderFrame() {
-	//
+	using namespace Graphics;
+
+	pd3ddev->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 255), NULL, NULL);
+
+	pd3ddev->BeginScene();
+
+	pd3ddev->EndScene();
+
+	pd3ddev->Present(NULL, NULL, hWnd, NULL);
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -106,7 +154,7 @@ VOID Popup(LPCWSTR lpMessage, LPCWSTR lpCaption) {
 
 DWORD PopupErr(LPCWSTR lpMessage, DWORD code, LPCWSTR lpCaption) {
 	wchar_t* szCode = HexStr(code);
-	const wchar_t szSep[] = L": ";
+	const wchar_t szSep[] = L" | ";
 
 	int buf_size = wcslen(lpMessage) + wcslen(szSep) + wcslen(szCode) + 1;
 	wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));

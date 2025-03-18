@@ -6,6 +6,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
 	if (StartLoop())			return 0x03;
 
+	// All necessary release calls and memory deallocations should be made by a static Collector object in the Graphics namespace
 	return 0;
 }
 
