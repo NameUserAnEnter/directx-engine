@@ -3,8 +3,18 @@
 #include <d3d9.h>
 
 
+#define D3DFVF_CUSTOM		D3DFVF_XYZRHW | D3DFVF_DIFFUSE
+
+struct CUSTOMVERTEX {
+	FLOAT x, y, z, rhw;
+	DWORD color;
+};
+
+
 // Functions used only in this file
 VOID RenderFrame();
+
+COORD GetClientSize();
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -24,8 +34,12 @@ namespace Graphics {
 	LPDIRECT3D9 pd3d			= NULL;
 	LPDIRECT3DDEVICE9 pd3ddev	= NULL;
 
+	LPDIRECT3DVERTEXBUFFER9 pvbuffer = NULL;
+
 	static struct Collector {
 		~Collector() {
+			if (pvbuffer != NULL)	pvbuffer->Release();
+
 			if (pd3ddev != NULL)	pd3ddev->Release();
 			if (pd3d != NULL)		pd3d->Release();
 		}
@@ -77,20 +91,43 @@ HRESULT InitGraphics() {
 	pd3d = Direct3DCreate9(D3D_SDK_VERSION);
 	if (pd3d == NULL) return PopupErr(L"Cannot create D3D object.", 0x01);
 
-	RECT client;
-	if (!GetClientRect(hWnd, &client)) return PopupErr(L"GetClientRect");
-
 	// Initialize D3D present parameters
 	D3DPRESENT_PARAMETERS d3dpp = { };
 	d3dpp.Windowed = TRUE;
 	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
 	d3dpp.BackBufferFormat = D3DFMT_UNKNOWN;
-	//d3dpp.BackBufferWidth = client.right - client.left;
-	//d3dpp.BackBufferHeight = client.bottom - client.top;
 
 	// Create D3D device
 	HRESULT hr = pd3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &pd3ddev);
 	if (hr != D3D_OK) return PopupErr(L"Cannot create D3D device.", 0x02);
+
+	return S_OK;
+}
+
+HRESULT InitResources() {
+	using namespace Graphics;
+
+	COORD client = GetClientSize();
+	COORD offset = { client.X / 4, client.Y / 4 };
+
+	CUSTOMVERTEX vertices[] = {
+		{ client.X / 2,				client.Y / 2 - offset.Y, 0.5f, 1.0f, 0xFFFF0000 },
+		{ client.X / 2 + offset.X,	client.Y / 2 + offset.Y, 0.5f, 1.0f, 0xFF00FF00 },
+		{ client.X / 2 - offset.X,	client.Y / 2 + offset.Y, 0.5f, 1.0f, 0xFF00FFFF },
+	};
+
+	HRESULT hr = pd3ddev->CreateVertexBuffer(3 * sizeof(CUSTOMVERTEX), NULL, D3DFVF_CUSTOM, D3DPOOL_MANAGED, &pvbuffer, NULL);
+	if (hr != D3D_OK) return PopupErr(L"Cannot create vertex buffer.", 0x01);
+
+	VOID* ptr = NULL;
+
+	hr = pvbuffer->Lock(0, 0, (VOID**) &ptr, NULL);
+	if (hr != D3D_OK) return PopupErr(L"Cannot lock vertex buffer.", 0x02);
+
+	memcpy(ptr, vertices, sizeof(vertices));
+
+	hr = pvbuffer->Unlock();
+	if (hr != D3D_OK) return PopupErr(L"Cannot unlock vertex buffer.", 0x03);
 
 	return S_OK;
 }
@@ -119,13 +156,23 @@ HRESULT StartLoop() {
 VOID RenderFrame() {
 	using namespace Graphics;
 
-	pd3ddev->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 255), NULL, NULL);
-
+	pd3ddev->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 255), 1.0f, NULL);
 	pd3ddev->BeginScene();
 
-	pd3ddev->EndScene();
+	pd3ddev->SetStreamSource(0, pvbuffer, 0, sizeof(CUSTOMVERTEX));
+	pd3ddev->SetFVF(D3DFVF_CUSTOM);
 
+	pd3ddev->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 1);
+
+	pd3ddev->EndScene();
 	pd3ddev->Present(NULL, NULL, hWnd, NULL);
+}
+
+COORD GetClientSize() {
+	RECT rc = { };
+	GetClientRect(Graphics::hWnd, &rc);
+
+	return { (SHORT) (rc.right - rc.left), (SHORT) (rc.bottom - rc.top) };
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
