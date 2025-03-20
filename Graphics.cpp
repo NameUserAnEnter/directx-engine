@@ -1,17 +1,20 @@
 #include "Graphics.h"
 #include <math.h>
 #include <d3d9.h>
+#include <d3dx9.h>
 
 
-#define D3DFVF_CUSTOM		D3DFVF_XYZRHW | D3DFVF_DIFFUSE
+#define PI 3.14159
+#define D3DFVF_CUSTOM		D3DFVF_XYZ | D3DFVF_DIFFUSE
+
 
 struct CUSTOMVERTEX {
-	FLOAT x, y, z, rhw;
+	FLOAT x, y, z;
 	DWORD color;
 };
 
 
-// Functions used only in this file
+// Forward declarations for Functions used only in this file
 VOID RenderFrame();
 
 COORD GetClientSize();
@@ -58,6 +61,7 @@ HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, i
 	wc.style = CS_VREDRAW | CS_HREDRAW;
 	wc.lpszClassName = L"WindowClass";
 	wc.hbrBackground = CreateSolidBrush(RGB(0, 0, 0));
+	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 
 	RegisterClass(&wc);
 
@@ -101,19 +105,20 @@ HRESULT InitGraphics() {
 	HRESULT hr = pd3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &pd3ddev);
 	if (hr != D3D_OK) return PopupErr(L"Cannot create D3D device.", 0x02);
 
+	// Set rendering states
+	pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);		// temporarily disable lighting untill vertex normalls are added to the FVF
+
 	return S_OK;
 }
 
 HRESULT InitResources() {
 	using namespace Graphics;
 
-	COORD client = GetClientSize();
-	COORD offset = { client.X / 4, client.Y / 4 };
-
+	// 3D Model's vertex data
 	CUSTOMVERTEX vertices[] = {
-		{ client.X / 2,				client.Y / 2 - offset.Y, 0.5f, 1.0f, 0xFFFF0000 },
-		{ client.X / 2 + offset.X,	client.Y / 2 + offset.Y, 0.5f, 1.0f, 0xFF00FF00 },
-		{ client.X / 2 - offset.X,	client.Y / 2 + offset.Y, 0.5f, 1.0f, 0xFF00FFFF },
+		{ 0, 0.5, 0, 0xFFFF0000 },
+		{ 0.5, -0.5, 0, 0xFF00FF00 },
+		{ -0.5, -0.5, 0, 0xFF00FFFF },
 	};
 
 	HRESULT hr = pd3ddev->CreateVertexBuffer(3 * sizeof(CUSTOMVERTEX), NULL, D3DFVF_CUSTOM, D3DPOOL_MANAGED, &pvbuffer, NULL);
@@ -156,6 +161,25 @@ HRESULT StartLoop() {
 VOID RenderFrame() {
 	using namespace Graphics;
 
+
+	// --- Transformation matrices ---
+	// World transformation
+	D3DXMATRIX matWorld;
+
+	static float angle = 0.0f;
+	angle += PI / 4;
+	D3DXMatrixRotationY(&matWorld, angle / 100.f);
+
+	pd3ddev->SetTransform(D3DTS_WORLD, &matWorld);		// world transformation
+
+	// View transformation
+	// ...
+
+	// Projection transformation
+	// ...
+
+
+	// --- Scene rendering ---
 	pd3ddev->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 255), 1.0f, NULL);
 	pd3ddev->BeginScene();
 
