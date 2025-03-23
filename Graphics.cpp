@@ -4,7 +4,6 @@
 #include <d3dx9.h>
 
 
-#define PI 3.14159
 #define D3DFVF_CUSTOM		D3DFVF_XYZ | D3DFVF_DIFFUSE
 
 
@@ -18,6 +17,7 @@ struct CUSTOMVERTEX {
 VOID RenderFrame();
 
 COORD GetClientSize();
+FLOAT GetClientAspectRatio();
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
@@ -106,7 +106,8 @@ HRESULT InitGraphics() {
 	if (hr != D3D_OK) return PopupErr(L"Cannot create D3D device.", 0x02);
 
 	// Set rendering states
-	pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);		// temporarily disable lighting untill vertex normalls are added to the FVF
+	pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);	// temporary until fully 3d models are used
+	pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);		// temporarily disable lighting until vertex normalls are added to the FVF
 
 	return S_OK;
 }
@@ -164,19 +165,25 @@ VOID RenderFrame() {
 
 	// --- Transformation matrices ---
 	// World transformation
-	D3DXMATRIX matWorld;
+	D3DXMATRIX matWorld, matView, matProj;
 
 	static float angle = 0.0f;
-	angle += PI / 4;
-	D3DXMatrixRotationY(&matWorld, angle / 100.f);
+	angle += D3DX_PI / 4;
 
-	pd3ddev->SetTransform(D3DTS_WORLD, &matWorld);		// world transformation
+	D3DXMatrixRotationY(&matWorld, angle / 10.f);
+	pd3ddev->SetTransform(D3DTS_WORLD, &matWorld);
 
 	// View transformation
-	// ...
+	D3DXVECTOR3 eye		(0, 1, -2);
+	D3DXVECTOR3 target	(0, 0,  0);
+	D3DXVECTOR3 up		(0, 1,  0);
+
+	D3DXMatrixLookAtLH(&matView, &eye, &target, &up);
+	pd3ddev->SetTransform(D3DTS_VIEW, &matView);
 
 	// Projection transformation
-	// ...
+	D3DXMatrixPerspectiveFovLH(&matProj, D3DX_PI / 4, GetClientAspectRatio(), 1.0f, 100.0f);
+	pd3ddev->SetTransform(D3DTS_PROJECTION, &matProj);
 
 
 	// --- Scene rendering ---
@@ -197,6 +204,13 @@ COORD GetClientSize() {
 	GetClientRect(Graphics::hWnd, &rc);
 
 	return { (SHORT) (rc.right - rc.left), (SHORT) (rc.bottom - rc.top) };
+}
+
+FLOAT GetClientAspectRatio() {
+	COORD client = GetClientSize();
+	if (client.Y == 0) return 0.0f;
+
+	return client.X / client.Y;
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
