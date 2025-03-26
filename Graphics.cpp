@@ -4,16 +4,18 @@
 #include <d3dx9.h>
 
 
-#define D3DFVF_CUSTOM		D3DFVF_XYZ | D3DFVF_NORMAL
+#define D3DFVF_CUSTOM		D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_TEX1
 
 
 struct CUSTOMVERTEX {
 	D3DXVECTOR3 position, normal;
+	FLOAT tu, tv;
 };
 
 
 // Forward declarations for Functions used only in this file
 VOID RenderFrame();
+VOID UpdateTextures();
 VOID UpdateLighting();
 VOID UpdateTransformations();
 
@@ -39,6 +41,8 @@ namespace Graphics {
 	LPDIRECT3DDEVICE9 pd3ddev	= NULL;
 
 	LPDIRECT3DVERTEXBUFFER9 pvbuffer = NULL;
+
+	LPDIRECT3DTEXTURE9 texture = NULL;
 
 	static struct Collector {
 		~Collector() {
@@ -107,13 +111,13 @@ HRESULT InitGraphics() {
 	if (hr != D3D_OK) return PopupErr(L"Cannot create D3D device.", 0x02);
 
 	// Set rendering states
-	pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);	// temporary until fully 3d models are used
-	//pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);		// temporarily disable lighting until vertex normalls are added to the FVF
+	//pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);	// temporary until fully 3d models are used
+	pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);		// temporarily disable lighting until vertex normalls are added to the FVF
 
 	// to do: disable culling and try to correct cylinder artifacts with z/stencil buffer used as in the reference?
 
-	pd3ddev->SetRenderState(D3DRS_LIGHTING, TRUE);
-	pd3ddev->SetRenderState(D3DRS_AMBIENT, 0x00202020);
+	//pd3ddev->SetRenderState(D3DRS_LIGHTING, TRUE);
+	//pd3ddev->SetRenderState(D3DRS_AMBIENT, 0x00202020);
 
 	return S_OK;
 }
@@ -125,6 +129,7 @@ HRESULT InitResources() {
 	HRESULT hr = pd3ddev->CreateVertexBuffer(6 * sizeof(CUSTOMVERTEX), NULL, D3DFVF_CUSTOM, D3DPOOL_MANAGED, &pvbuffer, NULL);
 	if (hr != D3D_OK) return PopupErr(L"Cannot create vertex buffer.", 0x01);
 
+	// Initialize geometry
 	CUSTOMVERTEX* vertices = NULL;
 
 	hr = pvbuffer->Lock(0, 0, (VOID**) &vertices, NULL);
@@ -138,10 +143,22 @@ HRESULT InitResources() {
 	vertices[4].position = {  1.0, -1.0, -1.0 };
 	vertices[5].position = { -1.0, -1.0, -1.0 };
 
+	vertices[0].tu = 0.0; vertices[0].tv = 0.0;
+	vertices[1].tu = 1.0; vertices[1].tv = 0.0;
+	vertices[2].tu = 1.0; vertices[2].tv = 1.0;
+
+	vertices[3].tu = 0.0; vertices[3].tv = 0.0;
+	vertices[4].tu = 1.0; vertices[4].tv = 1.0;
+	vertices[5].tu = 0.0; vertices[5].tu = 1.0;
+
 	for (int i = 0; i < 6; i++) vertices[i].normal = { 0, 0, -1 };
 
 	hr = pvbuffer->Unlock();
 	if (hr != D3D_OK) return PopupErr(L"Cannot unlock vertex buffer.", 0x03);
+
+	// Load texture
+	hr = D3DXCreateTextureFromFile(pd3ddev, L"data/poison.bmp", &texture);
+	if (hr != D3D_OK) return PopupErr(L"Cannot load texture.", 0x04);
 
 	return S_OK;
 }
@@ -170,7 +187,8 @@ HRESULT StartLoop() {
 VOID RenderFrame() {
 	using namespace Graphics;
 
-	UpdateLighting();
+	//UpdateLighting();
+	UpdateTextures();
 	UpdateTransformations();
 
 	// --- Scene rendering ---
@@ -185,6 +203,14 @@ VOID RenderFrame() {
 		pd3ddev->EndScene();
 		pd3ddev->Present(NULL, NULL, hWnd, NULL);
 	}
+}
+
+VOID UpdateTextures() {
+	using namespace Graphics;
+
+	pd3ddev->SetTexture(0, texture);
+	pd3ddev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+	pd3ddev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
 }
 
 VOID UpdateLighting() {
