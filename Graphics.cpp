@@ -5,7 +5,6 @@
 
 
 #define D3DFVF_CUSTOM		D3DFVF_XYZ | D3DFVF_NORMAL
-#define CYLINDER_DENSITY	50
 
 
 struct CUSTOMVERTEX {
@@ -122,27 +121,24 @@ HRESULT InitGraphics() {
 HRESULT InitResources() {
 	using namespace Graphics;
 
-	const unsigned int density = CYLINDER_DENSITY;
-
 	// Create vertex buffer
-	HRESULT hr = pd3ddev->CreateVertexBuffer(density * 2 * sizeof(CUSTOMVERTEX), NULL, D3DFVF_CUSTOM, D3DPOOL_MANAGED, &pvbuffer, NULL);
+	HRESULT hr = pd3ddev->CreateVertexBuffer(6 * sizeof(CUSTOMVERTEX), NULL, D3DFVF_CUSTOM, D3DPOOL_MANAGED, &pvbuffer, NULL);
 	if (hr != D3D_OK) return PopupErr(L"Cannot create vertex buffer.", 0x01);
 
 	CUSTOMVERTEX* vertices = NULL;
 
 	hr = pvbuffer->Lock(0, 0, (VOID**) &vertices, NULL);
 	if (hr != D3D_OK) return PopupErr(L"Cannot lock vertex buffer.", 0x02);
-	
-	// Cylinder shape initialization
-	for (int i = 0; i < density; i++) {
-		FLOAT current_angle = (2 * D3DX_PI * i) / (density - 1);
 
-		vertices[2 * i + 0].position	= D3DXVECTOR3(cosf(current_angle), sinf(current_angle), 1.0f);
-		vertices[2 * i + 0].normal		= D3DXVECTOR3(cosf(current_angle), sinf(current_angle), 0.0f);
+	vertices[0].position = { -1.0,  1.0, -1.0 };
+	vertices[1].position = {  1.0,  1.0, -1.0 };
+	vertices[2].position = {  1.0, -1.0, -1.0 };
 
-		vertices[2 * i + 1].position	= D3DXVECTOR3(cosf(current_angle), sinf(current_angle), -1.0f);
-		vertices[2 * i + 1].normal		= D3DXVECTOR3(cosf(current_angle), sinf(current_angle), 0.0f);
-	}
+	vertices[3].position = { -1.0,  1.0, -1.0 };
+	vertices[4].position = {  1.0, -1.0, -1.0 };
+	vertices[5].position = { -1.0, -1.0, -1.0 };
+
+	for (int i = 0; i < 6; i++) vertices[i].normal = { 0, 0, -1 };
 
 	hr = pvbuffer->Unlock();
 	if (hr != D3D_OK) return PopupErr(L"Cannot unlock vertex buffer.", 0x03);
@@ -184,7 +180,7 @@ VOID RenderFrame() {
 		pd3ddev->SetStreamSource(0, pvbuffer, 0, sizeof(CUSTOMVERTEX));
 		pd3ddev->SetFVF(D3DFVF_CUSTOM);
 
-		pd3ddev->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, CYLINDER_DENSITY * 2 - 2);		// adjust to the cylinder shape
+		pd3ddev->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 2);		// adjust to the cylinder shape
 
 		pd3ddev->EndScene();
 		pd3ddev->Present(NULL, NULL, hWnd, NULL);
@@ -251,7 +247,7 @@ FLOAT GetClientAspectRatio() {
 	COORD client = GetClientSize();
 	if (client.Y == 0) return 0.0f;
 
-	return client.X / client.Y;
+	return (FLOAT) client.X / (FLOAT) client.Y;
 }
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
