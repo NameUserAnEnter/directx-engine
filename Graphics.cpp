@@ -4,17 +4,19 @@
 #include <d3dx9.h>
 
 
-#define D3DFVF_CUSTOM		D3DFVF_XYZ | D3DFVF_DIFFUSE
+#define D3DFVF_CUSTOM		D3DFVF_XYZ | D3DFVF_NORMAL
+#define CYLINDER_DENSITY	50
 
 
 struct CUSTOMVERTEX {
-	FLOAT x, y, z;
-	DWORD color;
+	D3DXVECTOR3 position, normal;
 };
 
 
 // Forward declarations for Functions used only in this file
 VOID RenderFrame();
+VOID UpdateLighting();
+VOID UpdateTransformations();
 
 COORD GetClientSize();
 FLOAT GetClientAspectRatio();
@@ -107,7 +109,12 @@ HRESULT InitGraphics() {
 
 	// Set rendering states
 	pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);	// temporary until fully 3d models are used
-	pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);		// temporarily disable lighting until vertex normalls are added to the FVF
+	//pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);		// temporarily disable lighting until vertex normalls are added to the FVF
+
+	// to do: disable culling and try to correct cylinder artifacts with z/stencil buffer used as in the reference?
+
+	pd3ddev->SetRenderState(D3DRS_LIGHTING, TRUE);
+	pd3ddev->SetRenderState(D3DRS_AMBIENT, 0x00202020);
 
 	return S_OK;
 }
@@ -115,22 +122,27 @@ HRESULT InitGraphics() {
 HRESULT InitResources() {
 	using namespace Graphics;
 
-	// 3D Model's vertex data
-	CUSTOMVERTEX vertices[] = {
-		{ 0, 0.5, 0, 0xFFFF0000 },
-		{ 0.5, -0.5, 0, 0xFF00FF00 },
-		{ -0.5, -0.5, 0, 0xFF00FFFF },
-	};
+	const unsigned int density = CYLINDER_DENSITY;
 
-	HRESULT hr = pd3ddev->CreateVertexBuffer(3 * sizeof(CUSTOMVERTEX), NULL, D3DFVF_CUSTOM, D3DPOOL_MANAGED, &pvbuffer, NULL);
+	// Create vertex buffer
+	HRESULT hr = pd3ddev->CreateVertexBuffer(density * 2 * sizeof(CUSTOMVERTEX), NULL, D3DFVF_CUSTOM, D3DPOOL_MANAGED, &pvbuffer, NULL);
 	if (hr != D3D_OK) return PopupErr(L"Cannot create vertex buffer.", 0x01);
 
-	VOID* ptr = NULL;
+	CUSTOMVERTEX* vertices = NULL;
 
-	hr = pvbuffer->Lock(0, 0, (VOID**) &ptr, NULL);
+	hr = pvbuffer->Lock(0, 0, (VOID**) &vertices, NULL);
 	if (hr != D3D_OK) return PopupErr(L"Cannot lock vertex buffer.", 0x02);
+	
+	// Cylinder shape initialization
+	for (int i = 0; i < density; i++) {
+		FLOAT current_angle = (2 * D3DX_PI * i) / (density - 1);
 
-	memcpy(ptr, vertices, sizeof(vertices));
+		vertices[2 * i + 0].position	= D3DXVECTOR3(cosf(current_angle), sinf(current_angle), 1.0f);
+		vertices[2 * i + 0].normal		= D3DXVECTOR3(cosf(current_angle), sinf(current_angle), 0.0f);
+
+		vertices[2 * i + 1].position	= D3DXVECTOR3(cosf(current_angle), sinf(current_angle), -1.0f);
+		vertices[2 * i + 1].normal		= D3DXVECTOR3(cosf(current_angle), sinf(current_angle), 0.0f);
+	}
 
 	hr = pvbuffer->Unlock();
 	if (hr != D3D_OK) return PopupErr(L"Cannot unlock vertex buffer.", 0x03);
@@ -162,21 +174,63 @@ HRESULT StartLoop() {
 VOID RenderFrame() {
 	using namespace Graphics;
 
+	UpdateLighting();
+	UpdateTransformations();
 
-	// --- Transformation matrices ---
+	// --- Scene rendering ---
+	pd3ddev->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 255), 1.0f, NULL);
+	if (pd3ddev->BeginScene() == D3D_OK) {
+
+		pd3ddev->SetStreamSource(0, pvbuffer, 0, sizeof(CUSTOMVERTEX));
+		pd3ddev->SetFVF(D3DFVF_CUSTOM);
+
+		pd3ddev->DrawPrimitive(D3DPT_TRIANGLESTRIP, 0, CYLINDER_DENSITY * 2 - 2);		// adjust to the cylinder shape
+
+		pd3ddev->EndScene();
+		pd3ddev->Present(NULL, NULL, hWnd, NULL);
+	}
+}
+
+VOID UpdateLighting() {
+	using namespace Graphics;
+
+	// Set material
+	D3DMATERIAL9 material = { };
+	material.Diffuse = { 1.0f, 1.0f, 0.0f, 1.0f };
+	material.Ambient = { 1.0f, 1.0f, 0.0f, 1.0f };
+	
+	pd3ddev->SetMaterial(&material);
+
+	// Set light
+	D3DLIGHT9 light = { };
+	light.Type = D3DLIGHT_DIRECTIONAL;
+	light.Diffuse = { 1.0f, 1.0f, 1.0f, 0.0f };
+	light.Direction = { 0, 0, 1 };
+
+	pd3ddev->SetLight(0, &light);
+	pd3ddev->LightEnable(0, TRUE);
+}
+
+VOID UpdateTransformations() {
+	using namespace Graphics;
+
 	// World transformation
 	D3DXMATRIX matWorld, matView, matProj;
 
 	static float angle = 0.0f;
 	angle += D3DX_PI / 4;
 
-	D3DXMatrixRotationY(&matWorld, angle / 10.f);
+	D3DXMATRIX matRotation, matTranslation;
+	D3DXMatrixRotationYawPitchRoll(&matRotation, angle / 50.f, 0, 0);
+	D3DXMatrixTranslation(&matTranslation, 0, 0, 0);
+
+	D3DXMatrixMultiply(&matWorld, &matTranslation, &matRotation);
 	pd3ddev->SetTransform(D3DTS_WORLD, &matWorld);
 
 	// View transformation
-	D3DXVECTOR3 eye		(0, 1, -2);
-	D3DXVECTOR3 target	(0, 0,  0);
-	D3DXVECTOR3 up		(0, 1,  0);
+	D3DXVECTOR3 eye(0, 1, -5);
+	D3DXVECTOR3 target(0, 0, 0);
+	D3DXVECTOR3 up(0, 1, 0);
 
 	D3DXMatrixLookAtLH(&matView, &eye, &target, &up);
 	pd3ddev->SetTransform(D3DTS_VIEW, &matView);
@@ -184,19 +238,6 @@ VOID RenderFrame() {
 	// Projection transformation
 	D3DXMatrixPerspectiveFovLH(&matProj, D3DX_PI / 4, GetClientAspectRatio(), 1.0f, 100.0f);
 	pd3ddev->SetTransform(D3DTS_PROJECTION, &matProj);
-
-
-	// --- Scene rendering ---
-	pd3ddev->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 255), 1.0f, NULL);
-	pd3ddev->BeginScene();
-
-	pd3ddev->SetStreamSource(0, pvbuffer, 0, sizeof(CUSTOMVERTEX));
-	pd3ddev->SetFVF(D3DFVF_CUSTOM);
-
-	pd3ddev->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 1);
-
-	pd3ddev->EndScene();
-	pd3ddev->Present(NULL, NULL, hWnd, NULL);
 }
 
 COORD GetClientSize() {
