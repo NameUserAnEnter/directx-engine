@@ -1,4 +1,5 @@
 #include "Graphics.h"
+#include "Utility.h"
 #include <math.h>
 #include <d3d9.h>
 #include <d3dx9.h>
@@ -7,7 +8,7 @@
 #define D3DFVF_CUSTOM		D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_TEX1
 
 
-struct CUSTOMVERTEX {
+struct VERTEX {
 	D3DXVECTOR3 position, normal;
 	FLOAT tu, tv;
 };
@@ -15,20 +16,21 @@ struct CUSTOMVERTEX {
 
 // Forward declarations for Functions used only in this file
 VOID RenderFrame();
+
+VOID InitRenderStates();
+
 VOID UpdateTextures();
 VOID UpdateLighting();
 VOID UpdateTransformations();
+
+VOID LoadMeshFromWavefrontObj(LPCWSTR, LPD3DXMESH*);
 
 COORD GetClientSize();
 FLOAT GetClientAspectRatio();
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
-VOID	Popup(LPCWSTR = L"", LPCWSTR = L"");
 DWORD	PopupErr(LPCWSTR = L"", DWORD = GetLastError(), LPCWSTR = L"");
-
-LPWSTR NumStr(unsigned long long, unsigned int = 10);
-LPWSTR HexStr(unsigned long long);
 
 
 // Namespace for objects used across this file
@@ -40,13 +42,11 @@ namespace Graphics {
 	LPDIRECT3D9 pd3d			= NULL;
 	LPDIRECT3DDEVICE9 pd3ddev	= NULL;
 
-	LPDIRECT3DVERTEXBUFFER9 pvbuffer = NULL;
-
-	LPDIRECT3DTEXTURE9 texture = NULL;
+	LPD3DXMESH pmesh			= NULL;
 
 	static struct Collector {
 		~Collector() {
-			if (pvbuffer != NULL)	pvbuffer->Release();
+			if (pmesh != NULL)		pmesh->Release();
 
 			if (pd3ddev != NULL)	pd3ddev->Release();
 			if (pd3d != NULL)		pd3d->Release();
@@ -79,7 +79,7 @@ HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, i
 	int nWindowWidth = rc.right - rc.left;
 	int nWindowHeight = rc.bottom - rc.top;
 
-	HWND hWnd = CreateWindowW(wc.lpszClassName, lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
+	HWND hWnd = CreateWindowW(L"", lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
 	if (hWnd == NULL) {
 		return PopupErr(L"CreateWindow");
 	}
@@ -110,14 +110,7 @@ HRESULT InitGraphics() {
 	HRESULT hr = pd3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hWnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &pd3ddev);
 	if (hr != D3D_OK) return PopupErr(L"Cannot create D3D device.", 0x02);
 
-	// Set rendering states
-	//pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);	// temporary until fully 3d models are used
-	pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);		// temporarily disable lighting until vertex normalls are added to the FVF
-
-	// to do: disable culling and try to correct cylinder artifacts with z/stencil buffer used as in the reference?
-
-	//pd3ddev->SetRenderState(D3DRS_LIGHTING, TRUE);
-	//pd3ddev->SetRenderState(D3DRS_AMBIENT, 0x00202020);
+	InitRenderStates();
 
 	return S_OK;
 }
@@ -125,40 +118,8 @@ HRESULT InitGraphics() {
 HRESULT InitResources() {
 	using namespace Graphics;
 
-	// Create vertex buffer
-	HRESULT hr = pd3ddev->CreateVertexBuffer(6 * sizeof(CUSTOMVERTEX), NULL, D3DFVF_CUSTOM, D3DPOOL_MANAGED, &pvbuffer, NULL);
-	if (hr != D3D_OK) return PopupErr(L"Cannot create vertex buffer.", 0x01);
-
 	// Initialize geometry
-	CUSTOMVERTEX* vertices = NULL;
-
-	hr = pvbuffer->Lock(0, 0, (VOID**) &vertices, NULL);
-	if (hr != D3D_OK) return PopupErr(L"Cannot lock vertex buffer.", 0x02);
-
-	vertices[0].position = { -1.0,  1.0, -1.0 };
-	vertices[1].position = {  1.0,  1.0, -1.0 };
-	vertices[2].position = {  1.0, -1.0, -1.0 };
-
-	vertices[3].position = { -1.0,  1.0, -1.0 };
-	vertices[4].position = {  1.0, -1.0, -1.0 };
-	vertices[5].position = { -1.0, -1.0, -1.0 };
-
-	vertices[0].tu = 0.0; vertices[0].tv = 0.0;
-	vertices[1].tu = 1.0; vertices[1].tv = 0.0;
-	vertices[2].tu = 1.0; vertices[2].tv = 1.0;
-
-	vertices[3].tu = 0.0; vertices[3].tv = 0.0;
-	vertices[4].tu = 1.0; vertices[4].tv = 1.0;
-	vertices[5].tu = 0.0; vertices[5].tu = 1.0;
-
-	for (int i = 0; i < 6; i++) vertices[i].normal = { 0, 0, -1 };
-
-	hr = pvbuffer->Unlock();
-	if (hr != D3D_OK) return PopupErr(L"Cannot unlock vertex buffer.", 0x03);
-
-	// Load texture
-	hr = D3DXCreateTextureFromFile(pd3ddev, L"data/poison.bmp", &texture);
-	if (hr != D3D_OK) return PopupErr(L"Cannot load texture.", 0x04);
+	LoadMeshFromWavefrontObj(L"data/models/cube.obj", &pmesh);
 
 	return S_OK;
 }
@@ -194,23 +155,25 @@ VOID RenderFrame() {
 	// --- Scene rendering ---
 	pd3ddev->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 255), 1.0f, NULL);
 	if (pd3ddev->BeginScene() == D3D_OK) {
-
-		pd3ddev->SetStreamSource(0, pvbuffer, 0, sizeof(CUSTOMVERTEX));
-		pd3ddev->SetFVF(D3DFVF_CUSTOM);
-
-		pd3ddev->DrawPrimitive(D3DPT_TRIANGLELIST, 0, 2);		// adjust to the cylinder shape
+		// Draw geometry
 
 		pd3ddev->EndScene();
 		pd3ddev->Present(NULL, NULL, hWnd, NULL);
 	}
 }
 
-VOID UpdateTextures() {
+VOID InitRenderStates() {
 	using namespace Graphics;
 
-	pd3ddev->SetTexture(0, texture);
-	pd3ddev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
-	pd3ddev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
+	pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);
+
+	//pd3ddev->SetRenderState(D3DRS_LIGHTING, TRUE);
+	//pd3ddev->SetRenderState(D3DRS_AMBIENT, 0x00202020);
+}
+
+VOID UpdateTextures() {
+	using namespace Graphics;
 }
 
 VOID UpdateLighting() {
@@ -262,6 +225,12 @@ VOID UpdateTransformations() {
 	pd3ddev->SetTransform(D3DTS_PROJECTION, &matProj);
 }
 
+VOID LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
+	//
+
+	// D3DXCreateMesh ...
+}
+
 COORD GetClientSize() {
 	RECT rc = { };
 	GetClientRect(Graphics::hWnd, &rc);
@@ -296,69 +265,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	return 0;
 }
 
-VOID Popup(LPCWSTR lpMessage, LPCWSTR lpCaption) {
-	MessageBoxW(NULL, lpMessage, lpCaption, MB_OK);
-}
-
 DWORD PopupErr(LPCWSTR lpMessage, DWORD code, LPCWSTR lpCaption) {
-	wchar_t* szCode = HexStr(code);
-	const wchar_t szSep[] = L" | ";
+	Popup(std::wstring(lpMessage) + L" | " + NumStr(code) + L" (" + HexStr(code) + L")", lpCaption);
 
-	int buf_size = wcslen(lpMessage) + wcslen(szSep) + wcslen(szCode) + 1;
-	wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));
-	buf[0] = L'\0';
-	
-	wcscat_s(buf, buf_size, lpMessage);
-	wcscat_s(buf, buf_size, szSep);
-	wcscat_s(buf, buf_size, szCode);
-	Popup(buf, lpCaption);
-
-	free(szCode);
-	free(buf);
 	return code;
-}
-
-LPWSTR NumStr(unsigned long long num, unsigned int base) {
-	if (base == 0) return nullptr;
-
-	int digits = 0;
-	unsigned long long remaining = num;
-
-	do {
-		digits++;
-
-		remaining /= base;
-	} while(remaining > 0);
-
-	int buf_size = digits + 1;		// add one for '\0'
-
-	wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));
-	buf[buf_size - 1] = '\0';
-
-	for (int i = 0; i < digits; i++) {
-		int digit = (int) ((num / (unsigned long long) pow(base, i)) % base);
-
-		wchar_t starting_point = L'0';
-		if (digit >= 10) starting_point = L'A' - (wchar_t) 10;
-		
-		buf[digits - 1 - i] = starting_point + (wchar_t) digit;
-	}
-
-	// memory pointed to by the returned pointer has to be freed when no longer needed
-	return buf;
-}
-
-LPWSTR HexStr(unsigned long long num) {
-	const wchar_t prefix[] = L"0x";
-	wchar_t* num_part = NumStr(num, 16);
-
-	int buf_size = wcslen(prefix) + wcslen(num_part) + 1;
-	wchar_t* buf = (wchar_t*) calloc(buf_size, sizeof(wchar_t));
-	buf[0] = L'\0';
-
-	wcscat_s(buf, buf_size, prefix);
-	wcscat_s(buf, buf_size, num_part);
-
-	return buf;
 }
 
