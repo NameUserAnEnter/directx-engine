@@ -1,17 +1,10 @@
 #include "Graphics.h"
 #include "Utility.h"
 #include <math.h>
+#include <fstream>
+#include <string>
 #include <d3d9.h>
 #include <d3dx9.h>
-
-
-#define D3DFVF_CUSTOM		D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_TEX1
-
-
-struct VERTEX {
-	D3DXVECTOR3 position, normal;
-	FLOAT tu, tv;
-};
 
 
 // Forward declarations for Functions used only in this file
@@ -79,7 +72,7 @@ HRESULT InitWindow(LPCWSTR lpWindowTitle, int nClientWidth, int nClientHeight, i
 	int nWindowWidth = rc.right - rc.left;
 	int nWindowHeight = rc.bottom - rc.top;
 
-	HWND hWnd = CreateWindowW(L"", lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
+	HWND hWnd = CreateWindowW(wc.lpszClassName, lpWindowTitle, dwStyle, x, y, nWindowWidth, nWindowHeight, NULL, NULL, wc.hInstance, NULL);
 	if (hWnd == NULL) {
 		return PopupErr(L"CreateWindow");
 	}
@@ -226,7 +219,88 @@ VOID UpdateTransformations() {
 }
 
 VOID LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
-	//
+	std::vector<D3DXVECTOR3> positions;
+	std::vector<D3DXVECTOR3> normals;
+	std::vector<D3DXVECTOR2> texcoords;
+
+	struct VERTEX {
+		D3DXVECTOR3 position;
+		D3DXVECTOR3 normals;
+		D3DXVECTOR2 texcoords;
+	};
+
+	std::vector<VERTEX> vertices;
+	std::vector<DWORD> indices;
+
+	// Read the file
+	std::ifstream fileStream(lpFile);
+	std::string line = "";
+	while (true) {
+		line.push_back(fileStream.get());
+
+		int next = fileStream.peek();
+		if (next == '\n' || next == EOF) {
+			// Process the line ...
+			auto tokens = SplitByChar(line, ' ');		// Split line by spaces ' '
+
+			if (!tokens.empty()) {
+				auto prefix = tokens[0];
+				tokens.erase(tokens.begin());			// Remove prefix from tokens
+
+				if (prefix == "v") {					// If current line starts with a 'v' prefix
+					positions.push_back(D3DXVECTOR3());
+
+					if (tokens.size() >= 3) {
+						positions.back().x = std::atof(tokens[0].c_str());
+						positions.back().y = std::atof(tokens[1].c_str());
+						positions.back().z = std::atof(tokens[2].c_str());
+					}
+				}
+				else if (prefix == "vn") {
+					normals.push_back(D3DXVECTOR3());
+
+					if (tokens.size() >= 3) {
+						normals.back().x = std::atof(tokens[0].c_str());
+						normals.back().y = std::atof(tokens[1].c_str());
+						normals.back().z = std::atof(tokens[2].c_str());
+					}
+				}
+				else if (prefix == "vt") {
+					texcoords.push_back(D3DXVECTOR2());
+
+					if (tokens.size() >= 2) {
+						texcoords.back().x = std::atof(tokens[0].c_str());
+						texcoords.back().y = std::atof(tokens[1].c_str());
+					}
+				}
+				else if (prefix == "f") {
+					vertices.push_back(VERTEX());
+
+					for (auto token : tokens) {
+						auto subtokens = SplitByChar(token, '/');
+						enum index_type { pos = 1, norm, tex } i = pos;
+						for (auto subtoken : subtokens) {
+							if (!subtoken.empty()) {
+								int index = std::atoi(subtoken.c_str());
+
+								// if i == pos ...
+							}
+
+							i++;
+						}
+					}
+				}
+			}
+
+			// Break the loop if EOF reached
+			if (next == EOF) break;
+
+			line.clear();		// Empty the current line
+			fileStream.get();	// At this point the next character is newline, so discard '\n'
+		}
+	}
+
+	fileStream.close();
 
 	// D3DXCreateMesh ...
 }
