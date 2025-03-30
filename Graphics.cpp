@@ -125,9 +125,36 @@ HRESULT InitResources() {
 	using namespace Graphics;
 
 	HRESULT hr;
+
+	LPCWSTR szTextMeshFiles[] = {
+		L"cube-minus-x-forward-minus-y-up.obj",		// 0
+		L"cube-minus-x-forward-minus-z-up.obj",		// 1
+		L"cube-minus-x-forward-y-up.obj",			// 2
+		L"cube-minus-x-forward-z-up.obj",			// 3
+		L"cube-minus-y-forward-minus-x-up.obj",		// 4
+		L"cube-minus-y-forward-minus-z-up.obj",		// 5
+		L"cube-minus-y-forward-x-up.obj",			// 6
+		L"cube-minus-y-forward-z-up.obj",			// 7
+		L"cube-minus-z-forward-minus-x-up.obj",		// 8
+		L"cube-minus-z-forward-minus-y-up.obj",		// 9
+		L"cube-minus-z-forward-x-up.obj",			// 10
+		L"cube-minus-z-forward-y-up.obj",			// 11	default .obj export settings in blender
+		L"cube-x-forward-minus-y-up.obj",			// 12
+		L"cube-x-forward-minus-z-up.obj",			// 13
+		L"cube-x-forward-y-up.obj",					// 14
+		L"cube-x-forward-z-up.obj",					// 15
+		L"cube-y-forward-minus-x-up.obj",			// 16
+		L"cube-y-forward-minus-z-up.obj",			// 17
+		L"cube-y-forward-x-up.obj",					// 18
+		L"cube-y-forward-z-up.obj",					// 19
+		L"cube-z-forward-minus-x-up.obj",			// 20
+		L"cube-z-forward-minus-y-up.obj",			// 21
+		L"cube-z-forward-x-up.obj",					// 22
+		L"cube-z-forward-y-up.obj",					// 23
+	};
 	
-	std::wstring szTextureFile = L"data/textures/poison.bmp";
-	std::wstring szMeshFile = L"data/models/cube.obj";
+	std::wstring szTextureFile = L"data/textures/poison3.bmp";
+	std::wstring szMeshFile = L"data/models/" + (std::wstring) szTextMeshFiles[11];
 
 	// Initialize geometry
 	hr = LoadMeshFromWavefrontObj(szMeshFile.c_str(), &pmesh);
@@ -203,8 +230,9 @@ VOID UpdateTextures() {
 
 	pd3ddev->SetTexture(0, ptexture);
 
-	pd3ddev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+	pd3ddev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
 	pd3ddev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	pd3ddev->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_DIFFUSE);
 }
 
 VOID UpdateLighting() {
@@ -212,8 +240,8 @@ VOID UpdateLighting() {
 
 	// Set material
 	D3DMATERIAL9 material = { };
-	material.Diffuse = { 1.0f, 1.0f, 0.0f, 1.0f };
-	material.Ambient = { 1.0f, 1.0f, 0.0f, 1.0f };
+	material.Diffuse = { 1.0f, 1.0f, 1.0f, 1.0f };
+	material.Ambient = { 1.0f, 1.0f, 1.0f, 1.0f };
 	
 	pd3ddev->SetMaterial(&material);
 
@@ -237,7 +265,7 @@ VOID UpdateTransformations() {
 	angle += D3DX_PI / 4;
 
 	D3DXMATRIX matRotation, matTranslation;
-	D3DXMatrixRotationYawPitchRoll(&matRotation, angle / 50.f, 0, 0);
+	D3DXMatrixRotationYawPitchRoll(&matRotation, angle / 50.f, -D3DX_PI / 6, 0);
 	D3DXMatrixTranslation(&matTranslation, 0, 0, 0);
 
 	D3DXMatrixMultiply(&matWorld, &matTranslation, &matRotation);
@@ -311,6 +339,10 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 					if (tokens.size() >= 2) {
 						texcoords.back().x = std::atof(tokens[0].c_str());
 						texcoords.back().y = std::atof(tokens[1].c_str());
+
+						// temporary testing
+						//texcoords.back().x = 1 - std::atof(tokens[0].c_str());
+						//texcoords.back().y = 1 - std::atof(tokens[1].c_str());
 					}
 				}
 				else if (prefix == "f") {
