@@ -16,14 +16,15 @@ VOID UpdateTextures();
 VOID UpdateLighting();
 VOID UpdateTransformations();
 
-VOID LoadMeshFromWavefrontObj(LPCWSTR, LPD3DXMESH*);
+HRESULT LoadMeshFromWavefrontObj(LPCWSTR, LPD3DXMESH*);
 
 COORD GetClientSize();
 FLOAT GetClientAspectRatio();
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
-DWORD	PopupErr(LPCWSTR = L"", DWORD = GetLastError(), LPCWSTR = L"");
+DWORD	PopupErr(LPCWSTR = L"", DWORD = GetLastError());
+DWORD	PopupErr(std::wstring = L"", DWORD = GetLastError());
 
 
 // Namespace for objects used across this file
@@ -112,7 +113,8 @@ HRESULT InitResources() {
 	using namespace Graphics;
 
 	// Initialize geometry
-	LoadMeshFromWavefrontObj(L"data/models/cube.obj", &pmesh);
+	HRESULT hr = LoadMeshFromWavefrontObj(L"data/models/cube.obj", &pmesh);
+	if (hr != S_OK) return hr;
 
 	return S_OK;
 }
@@ -218,14 +220,14 @@ VOID UpdateTransformations() {
 	pd3ddev->SetTransform(D3DTS_PROJECTION, &matProj);
 }
 
-VOID LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
+HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 	std::vector<D3DXVECTOR3> positions;
 	std::vector<D3DXVECTOR3> normals;
 	std::vector<D3DXVECTOR2> texcoords;
 
 	struct VERTEX {
 		D3DXVECTOR3 position;
-		D3DXVECTOR3 normals;
+		D3DXVECTOR3 normal;
 		D3DXVECTOR2 texcoords;
 	};
 
@@ -234,7 +236,13 @@ VOID LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 
 	// Read the file
 	std::ifstream fileStream(lpFile);
+	
+	// If cannot open file ...
+	if (fileStream.fail()) return PopupErr(L"Cannot open mesh file \"" + std::wstring(lpFile) + L"\".", 0x01);
+
+	// Consider using std::getline() with EOF checking instead of get() and peek()
 	std::string line = "";
+
 	while (true) {
 		line.push_back(fileStream.get());
 
@@ -274,19 +282,46 @@ VOID LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 					}
 				}
 				else if (prefix == "f") {
-					vertices.push_back(VERTEX());
-
+					// Loop through face vertices
 					for (auto token : tokens) {
-						auto subtokens = SplitByChar(token, '/');
-						enum index_type { pos = 1, norm, tex } i = pos;
-						for (auto subtoken : subtokens) {
-							if (!subtoken.empty()) {
-								int index = std::atoi(subtoken.c_str());
+						VERTEX current_vertex;
+						
+						enum index_types { pos, tex, norm }; int index_type = index_types::pos;
+						// Note the order of index types has to be same as in .obj face data; "f p/t/n ..."
 
-								// if i == pos ...
+						auto subtokens = SplitByChar(token, '/');
+						for (auto subtoken : subtokens) {
+
+							if (!subtoken.empty()) {
+								int index = std::atoi(subtoken.c_str()) - 1;
+
+								if (index_type == index_types::pos  && index < positions.size()) current_vertex.position  = positions[index];
+								if (index_type == index_types::tex  && index < texcoords.size()) current_vertex.texcoords = texcoords[index];
+								if (index_type == index_types::norm && index < normals.size())   current_vertex.normal    = normals[index];
 							}
 
-							i++;
+							index_type++;
+						}
+
+						// Check if current vertex is a duplicate of any of the vertices already stored in vertex buffer
+						// If that's the case add index of the original vertex to the index buffer
+						// Otherwise add current vertex to the vertex buffer and store it's vertex buffer index in the index buffer
+						bool found = false;
+						for (int i = 0; i < vertices.size(); i++) {
+							if (vertices[i].position == current_vertex.position &&
+								vertices[i].texcoords == current_vertex.texcoords &&
+								vertices[i].normal == current_vertex.normal) {
+
+								indices.push_back(i);
+
+								found = true;
+								break;
+							}
+						}
+
+						if (!found) {
+							vertices.push_back(current_vertex);
+							indices.push_back(vertices.size() - 1);
 						}
 					}
 				}
@@ -302,7 +337,49 @@ VOID LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 
 	fileStream.close();
 
-	// D3DXCreateMesh ...
+	// Clear resources that are no longer needed
+	positions.clear();
+	normals.clear();
+	texcoords.clear();
+
+	const D3DVERTEXELEMENT9 vertex_elements[] = {
+		{ 0, 0,							D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+		{ 0, sizeof(D3DXVECTOR3),		D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
+		{ 0, sizeof(D3DXVECTOR3) * 2,	D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
+		D3DDECL_END()
+	};
+
+	using namespace Graphics;
+
+	HRESULT hr;
+	VERTEX* pvbuffer = NULL;
+	DWORD* pibuffer = NULL;
+	
+	// Create mesh object
+	hr = D3DXCreateMesh(indices.size() / 3, vertices.size(), D3DXMESH_MANAGED | D3DXMESH_32BIT, vertex_elements, pd3ddev, ppmesh);
+	if (hr == E_OUTOFMEMORY)	return PopupErr(L"Cannot create mesh object, out of memory.",	0x02);
+	else if (hr != D3D_OK)		return PopupErr(L"Cannot create mesh object.",					0x03);
+
+	// Initialize vertex buffer with local data
+	hr = (*ppmesh)->LockVertexBuffer(NULL, (VOID**) &pvbuffer);
+	if (hr != D3D_OK)			return PopupErr(L"Cannot lock vertex buffer.", 0x04);
+
+	for (int i = 0; i < vertices.size(); i++) pvbuffer[i] = vertices[i];
+
+	hr = (*ppmesh)->UnlockVertexBuffer();
+	if (hr != D3D_OK)			return PopupErr(L"Cannot unlock vertex buffer.", 0x05);
+	
+	// Initialize index buffer with local data
+	hr = (*ppmesh)->LockIndexBuffer(NULL, (VOID**) &pibuffer);
+	if (hr != D3D_OK)			return PopupErr(L"Cannot lock index buffer.", 0x06);
+
+	for (int i = 0; i < indices.size(); i++) pibuffer[i] = indices[i];
+
+	hr = (*ppmesh)->UnlockIndexBuffer();
+	if (hr != D3D_OK)			return PopupErr(L"Cannot unlock index buffer.",	0x07);
+
+	// Done
+	return S_OK;
 }
 
 COORD GetClientSize() {
@@ -339,9 +416,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	return 0;
 }
 
-DWORD PopupErr(LPCWSTR lpMessage, DWORD code, LPCWSTR lpCaption) {
-	Popup(std::wstring(lpMessage) + L" | " + NumStr(code) + L" (" + HexStr(code) + L")", lpCaption);
+DWORD PopupErr(LPCWSTR lpMessage, DWORD code) {
+	Popup(std::wstring(lpMessage) + L" | " + NumStr(code) + L" (" + HexStr(code) + L")", L"Error");
 
 	return code;
+}
+
+DWORD PopupErr(std::wstring str, DWORD code) {
+	return PopupErr(str.c_str(), code);
 }
 
