@@ -46,6 +46,14 @@ namespace Graphics {
 			if (pd3d != NULL)		pd3d->Release();
 		}
 	} _collector;
+
+	struct VERTEX {
+		D3DXVECTOR3 position;
+		D3DXVECTOR3 normal;
+		D3DXVECTOR2 texcoords;
+	};
+
+	const DWORD VERTEX_FORMAT = D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_TEX1;
 };
 
 
@@ -143,7 +151,7 @@ HRESULT StartLoop() {
 VOID RenderFrame() {
 	using namespace Graphics;
 
-	//UpdateLighting();
+	UpdateLighting();
 	UpdateTextures();
 	UpdateTransformations();
 
@@ -151,6 +159,19 @@ VOID RenderFrame() {
 	pd3ddev->Clear(0, NULL, D3DCLEAR_TARGET, D3DCOLOR_XRGB(0, 0, 255), 1.0f, NULL);
 	if (pd3ddev->BeginScene() == D3D_OK) {
 		// Draw geometry
+		LPDIRECT3DVERTEXBUFFER9 pvbuffer = NULL;
+		LPDIRECT3DINDEXBUFFER9 pibuffer = NULL;
+		HRESULT hr;
+
+		hr = pmesh->GetIndexBuffer(&pibuffer);
+		hr = pd3ddev->SetIndices(pibuffer);
+
+		hr = pmesh->GetVertexBuffer(&pvbuffer);
+		hr = pd3ddev->SetStreamSource(0, pvbuffer, 0, sizeof(VERTEX));
+
+		hr = pd3ddev->SetFVF(VERTEX_FORMAT);
+
+		hr = pd3ddev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, pmesh->GetNumVertices(), 0, pmesh->GetNumFaces());
 
 		pd3ddev->EndScene();
 		pd3ddev->Present(NULL, NULL, hWnd, NULL);
@@ -160,11 +181,9 @@ VOID RenderFrame() {
 VOID InitRenderStates() {
 	using namespace Graphics;
 
-	pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
-	pd3ddev->SetRenderState(D3DRS_LIGHTING, FALSE);
-
-	//pd3ddev->SetRenderState(D3DRS_LIGHTING, TRUE);
-	//pd3ddev->SetRenderState(D3DRS_AMBIENT, 0x00202020);
+	pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
+	pd3ddev->SetRenderState(D3DRS_LIGHTING, TRUE);
+	pd3ddev->SetRenderState(D3DRS_AMBIENT, 0x00202020);
 }
 
 VOID UpdateTextures() {
@@ -221,15 +240,11 @@ VOID UpdateTransformations() {
 }
 
 HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
+	using namespace Graphics;
+
 	std::vector<D3DXVECTOR3> positions;
 	std::vector<D3DXVECTOR3> normals;
 	std::vector<D3DXVECTOR2> texcoords;
-
-	struct VERTEX {
-		D3DXVECTOR3 position;
-		D3DXVECTOR3 normal;
-		D3DXVECTOR2 texcoords;
-	};
 
 	std::vector<VERTEX> vertices;
 	std::vector<DWORD> indices;
@@ -342,21 +357,12 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 	normals.clear();
 	texcoords.clear();
 
-	const D3DVERTEXELEMENT9 vertex_elements[] = {
-		{ 0, 0,							D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
-		{ 0, sizeof(D3DXVECTOR3),		D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL, 0 },
-		{ 0, sizeof(D3DXVECTOR3) * 2,	D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
-		D3DDECL_END()
-	};
-
-	using namespace Graphics;
-
 	HRESULT hr;
 	VERTEX* pvbuffer = NULL;
 	DWORD* pibuffer = NULL;
 	
 	// Create mesh object
-	hr = D3DXCreateMesh(indices.size() / 3, vertices.size(), D3DXMESH_MANAGED | D3DXMESH_32BIT, vertex_elements, pd3ddev, ppmesh);
+	hr = D3DXCreateMeshFVF(indices.size() / 3, vertices.size(), D3DXMESH_MANAGED | D3DXMESH_32BIT, VERTEX_FORMAT, pd3ddev, ppmesh);
 	if (hr == E_OUTOFMEMORY)	return PopupErr(L"Cannot create mesh object, out of memory.",	0x02);
 	else if (hr != D3D_OK)		return PopupErr(L"Cannot create mesh object.",					0x03);
 
