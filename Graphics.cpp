@@ -38,8 +38,12 @@ namespace Graphics {
 
 	LPD3DXMESH pmesh			= NULL;
 
+	LPDIRECT3DTEXTURE9 ptexture	= NULL;
+
 	static struct Collector {
 		~Collector() {
+			if (ptexture != NULL)	ptexture->Release();
+
 			if (pmesh != NULL)		pmesh->Release();
 
 			if (pd3ddev != NULL)	pd3ddev->Release();
@@ -120,9 +124,18 @@ HRESULT InitGraphics() {
 HRESULT InitResources() {
 	using namespace Graphics;
 
+	HRESULT hr;
+	
+	std::wstring szTextureFile = L"data/textures/poison.bmp";
+	std::wstring szMeshFile = L"data/models/cube.obj";
+
 	// Initialize geometry
-	HRESULT hr = LoadMeshFromWavefrontObj(L"data/models/cube.obj", &pmesh);
-	if (hr != S_OK) return hr;
+	hr = LoadMeshFromWavefrontObj(szMeshFile.c_str(), &pmesh);
+	if (hr != S_OK) return 0x01;
+
+	// Load textures
+	hr = D3DXCreateTextureFromFile(pd3ddev, szTextureFile.c_str(), &ptexture);
+	if (hr != S_OK) return PopupErr(L"Cannot load texture file \"" + szTextureFile + L"\"", 0x02);
 
 	return S_OK;
 }
@@ -161,17 +174,16 @@ VOID RenderFrame() {
 		// Draw geometry
 		LPDIRECT3DVERTEXBUFFER9 pvbuffer = NULL;
 		LPDIRECT3DINDEXBUFFER9 pibuffer = NULL;
-		HRESULT hr;
 
-		hr = pmesh->GetIndexBuffer(&pibuffer);
-		hr = pd3ddev->SetIndices(pibuffer);
+		pmesh->GetIndexBuffer(&pibuffer);
+		pd3ddev->SetIndices(pibuffer);
 
-		hr = pmesh->GetVertexBuffer(&pvbuffer);
-		hr = pd3ddev->SetStreamSource(0, pvbuffer, 0, sizeof(VERTEX));
+		pmesh->GetVertexBuffer(&pvbuffer);
+		pd3ddev->SetStreamSource(0, pvbuffer, 0, sizeof(VERTEX));
 
-		hr = pd3ddev->SetFVF(VERTEX_FORMAT);
+		pd3ddev->SetFVF(VERTEX_FORMAT);
 
-		hr = pd3ddev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, pmesh->GetNumVertices(), 0, pmesh->GetNumFaces());
+		pd3ddev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, 0, pmesh->GetNumVertices(), 0, pmesh->GetNumFaces());
 
 		pd3ddev->EndScene();
 		pd3ddev->Present(NULL, NULL, hWnd, NULL);
@@ -188,6 +200,11 @@ VOID InitRenderStates() {
 
 VOID UpdateTextures() {
 	using namespace Graphics;
+
+	pd3ddev->SetTexture(0, ptexture);
+
+	pd3ddev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+	pd3ddev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
 }
 
 VOID UpdateLighting() {
