@@ -154,7 +154,8 @@ HRESULT InitResources() {
 	};
 	
 	std::wstring szTextureFile = L"data/textures/poison3.bmp";
-	std::wstring szMeshFile = L"data/models/" + (std::wstring) szTextMeshFiles[11];
+	std::wstring szMeshFile = L"data/models/tipcube.obj";
+	//std::wstring szMeshFile = L"data/models/" + (std::wstring) szTextMeshFiles[11];
 
 	// Initialize geometry
 	hr = LoadMeshFromWavefrontObj(szMeshFile.c_str(), &pmesh);
@@ -405,6 +406,9 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 	positions.clear();
 	normals.clear();
 	texcoords.clear();
+
+	// Error if no vertex data has been generated from the file
+	if (vertices.empty())		return PopupErr(L"Mesh file \"" + std::wstring(lpFile) + L"\" contains no vertex data.", 0x101);
 
 	HRESULT hr;
 	VERTEX* pvbuffer = NULL;
