@@ -16,7 +16,17 @@ VOID UpdateTextures();
 VOID UpdateLighting();
 VOID UpdateTransformations();
 
-HRESULT LoadMeshFromWavefrontObj(LPCWSTR, LPD3DXMESH*);
+struct InversionSetup {
+	BOOL bAxisX = FALSE;
+	BOOL bAxisY = FALSE;
+	BOOL bAxisZ = FALSE;
+
+	BOOL bAxisTU = FALSE;
+	BOOL bAxisTV = FALSE;
+};
+
+HRESULT LoadMeshFromWavefrontObj(LPCWSTR, LPD3DXMESH*, InversionSetup);
+HRESULT LoadMesh(LPCWSTR, LPD3DXMESH*);
 
 COORD GetClientSize();
 FLOAT GetClientAspectRatio();
@@ -128,13 +138,9 @@ HRESULT InitResources() {
 	
 	std::wstring szTextureFile = L"data/textures/poison3.bmp";
 	std::wstring szMeshFile = L"data/models/obj-setup2/cube-axis-default.obj";
-	//std::wstring szMeshFile = L"data/models/axis-tweaking1/cube-minus-z-forward-y-up.obj";
-	//std::wstring szMeshFile = L"data/models/axis-tweaking2/plane9.obj";
-	//std::wstring szMeshFile = L"data/models/obj-setup1/cube.obj";
-	//std::wstring szMeshFile = L"data/models/obj-setup1/plane.obj";
 
 	// Initialize geometry
-	hr = LoadMeshFromWavefrontObj(szMeshFile.c_str(), &pmesh);
+	hr = LoadMesh(szMeshFile.c_str(), &pmesh);
 	if (hr != S_OK) return 0x01;
 
 	// Load textures
@@ -278,7 +284,7 @@ VOID UpdateTransformations() {
 	pd3ddev->SetTransform(D3DTS_PROJECTION, &matProj);
 }
 
-HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
+HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh, InversionSetup inv) {
 	using namespace Graphics;
 
 	std::vector<D3DXVECTOR3> positions;
@@ -309,8 +315,6 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 				auto prefix = tokens[0];
 				tokens.erase(tokens.begin());			// Remove prefix from tokens
 
-				static const bool bInvertAxisZ = true;
-
 				if (prefix == "v") {					// If current line starts with a 'v' prefix
 					positions.push_back(D3DXVECTOR3());
 
@@ -319,7 +323,9 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 						positions.back().y = std::atof(tokens[1].c_str());
 						positions.back().z = std::atof(tokens[2].c_str());
 
-						if (bInvertAxisZ) positions.back().z *= -1;
+						if (inv.bAxisX) positions.back().x *= -1;
+						if (inv.bAxisY) positions.back().y *= -1;
+						if (inv.bAxisZ) positions.back().z *= -1;
 					}
 				}
 				else if (prefix == "vn") {
@@ -330,7 +336,9 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 						normals.back().y = std::atof(tokens[1].c_str());
 						normals.back().z = std::atof(tokens[2].c_str());
 
-						if (bInvertAxisZ) normals.back().z *= -1; 
+						if (inv.bAxisX) normals.back().x *= -1;
+						if (inv.bAxisY) normals.back().y *= -1;
+						if (inv.bAxisZ) normals.back().z *= -1;
 					}
 				}
 				else if (prefix == "vt") {
@@ -340,11 +348,8 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 						texcoords.back().x = std::atof(tokens[0].c_str());
 						texcoords.back().y = std::atof(tokens[1].c_str());
 
-						static const bool bInvertAxisTU = false;
-						static const bool bInvertAxisTV = true;
-
-						if (bInvertAxisTU) texcoords.back().x = 1 - texcoords.back().x;
-						if (bInvertAxisTV) texcoords.back().y = 1 - texcoords.back().y;
+						if (inv.bAxisTU) texcoords.back().x = 1 - texcoords.back().x;
+						if (inv.bAxisTV) texcoords.back().y = 1 - texcoords.back().y;
 					}
 				}
 				else if (prefix == "f") {
@@ -440,6 +445,10 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 
 	// Done
 	return S_OK;
+}
+
+HRESULT LoadMesh(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
+	return LoadMeshFromWavefrontObj(lpFile, ppmesh, { FALSE, FALSE, TRUE, FALSE, TRUE });
 }
 
 COORD GetClientSize() {
