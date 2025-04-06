@@ -125,37 +125,13 @@ HRESULT InitResources() {
 	using namespace Graphics;
 
 	HRESULT hr;
-
-	LPCWSTR szTextMeshFiles[] = {
-		L"cube-minus-x-forward-minus-y-up.obj",		// 0
-		L"cube-minus-x-forward-minus-z-up.obj",		// 1
-		L"cube-minus-x-forward-y-up.obj",			// 2
-		L"cube-minus-x-forward-z-up.obj",			// 3
-		L"cube-minus-y-forward-minus-x-up.obj",		// 4
-		L"cube-minus-y-forward-minus-z-up.obj",		// 5
-		L"cube-minus-y-forward-x-up.obj",			// 6
-		L"cube-minus-y-forward-z-up.obj",			// 7
-		L"cube-minus-z-forward-minus-x-up.obj",		// 8
-		L"cube-minus-z-forward-minus-y-up.obj",		// 9
-		L"cube-minus-z-forward-x-up.obj",			// 10
-		L"cube-minus-z-forward-y-up.obj",			// 11	default .obj export settings in blender
-		L"cube-x-forward-minus-y-up.obj",			// 12
-		L"cube-x-forward-minus-z-up.obj",			// 13
-		L"cube-x-forward-y-up.obj",					// 14
-		L"cube-x-forward-z-up.obj",					// 15
-		L"cube-y-forward-minus-x-up.obj",			// 16
-		L"cube-y-forward-minus-z-up.obj",			// 17
-		L"cube-y-forward-x-up.obj",					// 18
-		L"cube-y-forward-z-up.obj",					// 19
-		L"cube-z-forward-minus-x-up.obj",			// 20
-		L"cube-z-forward-minus-y-up.obj",			// 21
-		L"cube-z-forward-x-up.obj",					// 22
-		L"cube-z-forward-y-up.obj",					// 23
-	};
 	
 	std::wstring szTextureFile = L"data/textures/poison3.bmp";
-	std::wstring szMeshFile = L"data/models/tipcube.obj";
-	//std::wstring szMeshFile = L"data/models/" + (std::wstring) szTextMeshFiles[11];
+	std::wstring szMeshFile = L"data/models/obj-setup2/cube-axis-default.obj";
+	//std::wstring szMeshFile = L"data/models/axis-tweaking1/cube-minus-z-forward-y-up.obj";
+	//std::wstring szMeshFile = L"data/models/axis-tweaking2/plane9.obj";
+	//std::wstring szMeshFile = L"data/models/obj-setup1/cube.obj";
+	//std::wstring szMeshFile = L"data/models/obj-setup1/plane.obj";
 
 	// Initialize geometry
 	hr = LoadMeshFromWavefrontObj(szMeshFile.c_str(), &pmesh);
@@ -221,9 +197,10 @@ VOID RenderFrame() {
 VOID InitRenderStates() {
 	using namespace Graphics;
 
-	pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_CCW);
+	pd3ddev->SetRenderState(D3DRS_CULLMODE, D3DCULL_CW);
 	pd3ddev->SetRenderState(D3DRS_LIGHTING, TRUE);
 	pd3ddev->SetRenderState(D3DRS_AMBIENT, 0x00202020);
+	//pd3ddev->SetRenderState(D3DRS_FILLMODE, D3DFILL_WIREFRAME);
 }
 
 VOID UpdateTextures() {
@@ -262,18 +239,34 @@ VOID UpdateTransformations() {
 	// World transformation
 	D3DXMATRIX matWorld, matView, matProj;
 
-	static float angle = 0.0f;
-	angle += D3DX_PI / 4;
+	static const D3DXVECTOR3 start = {
+		0,
+		0,
+		0
+	};
+	
+	static const D3DXVECTOR3 offset = {
+		0,
+		0,
+		0
+	};
 
-	D3DXMATRIX matRotation, matTranslation;
-	D3DXMatrixRotationYawPitchRoll(&matRotation, angle / 50.f, -D3DX_PI / 6, 0);
+	static D3DXVECTOR3 rot = { start.x, start.y, start.z };
+	rot.x += offset.x;
+	rot.y += offset.y;
+	rot.z += offset.z;
+
+	D3DXMATRIX matRotationX, matRotationY, matRotationZ, matTranslation;
+	D3DXMatrixRotationX(&matRotationX, rot.x);
+	D3DXMatrixRotationY(&matRotationY, rot.y);
+	D3DXMatrixRotationZ(&matRotationZ, rot.z);
 	D3DXMatrixTranslation(&matTranslation, 0, 0, 0);
 
-	D3DXMatrixMultiply(&matWorld, &matTranslation, &matRotation);
+	matWorld = matTranslation * matRotationY * matRotationX * matRotationZ;
 	pd3ddev->SetTransform(D3DTS_WORLD, &matWorld);
 
 	// View transformation
-	D3DXVECTOR3 eye(0, 1, -5);
+	D3DXVECTOR3 eye(0, 3, -5);
 	D3DXVECTOR3 target(0, 0, 0);
 	D3DXVECTOR3 up(0, 1, 0);
 
@@ -316,6 +309,8 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 				auto prefix = tokens[0];
 				tokens.erase(tokens.begin());			// Remove prefix from tokens
 
+				static const bool bInvertAxisZ = true;
+
 				if (prefix == "v") {					// If current line starts with a 'v' prefix
 					positions.push_back(D3DXVECTOR3());
 
@@ -323,6 +318,8 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 						positions.back().x = std::atof(tokens[0].c_str());
 						positions.back().y = std::atof(tokens[1].c_str());
 						positions.back().z = std::atof(tokens[2].c_str());
+
+						if (bInvertAxisZ) positions.back().z *= -1;
 					}
 				}
 				else if (prefix == "vn") {
@@ -332,6 +329,8 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 						normals.back().x = std::atof(tokens[0].c_str());
 						normals.back().y = std::atof(tokens[1].c_str());
 						normals.back().z = std::atof(tokens[2].c_str());
+
+						if (bInvertAxisZ) normals.back().z *= -1; 
 					}
 				}
 				else if (prefix == "vt") {
@@ -341,9 +340,11 @@ HRESULT LoadMeshFromWavefrontObj(LPCWSTR lpFile, LPD3DXMESH* ppmesh) {
 						texcoords.back().x = std::atof(tokens[0].c_str());
 						texcoords.back().y = std::atof(tokens[1].c_str());
 
-						// temporary testing
-						//texcoords.back().x = 1 - std::atof(tokens[0].c_str());
-						//texcoords.back().y = 1 - std::atof(tokens[1].c_str());
+						static const bool bInvertAxisTU = false;
+						static const bool bInvertAxisTV = true;
+
+						if (bInvertAxisTU) texcoords.back().x = 1 - texcoords.back().x;
+						if (bInvertAxisTV) texcoords.back().y = 1 - texcoords.back().y;
 					}
 				}
 				else if (prefix == "f") {
